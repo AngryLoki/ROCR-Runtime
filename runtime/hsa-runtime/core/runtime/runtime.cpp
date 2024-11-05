@@ -1686,8 +1686,9 @@ void Runtime::AsyncEventsLoop(void* _eventsInfo) {
             if (i == 0) {
               hsa_signal_handle(async_events_control_.wake)->StoreRelaxed(0);
             } else {
-              processEvent(i, value);
-              i--;
+              if (processEvent(i, value) == false) {
+                i--;
+              }
             }
             if (!wait_any) {
               finish = true;
@@ -1715,6 +1716,20 @@ void Runtime::AsyncEventsLoop(void* _eventsInfo) {
         if (interrupt_wait) {
           WaitForInterrupt();
         }
+      }
+    }
+
+    // Check for dead signals
+    if (core::Runtime::runtime_singleton_->flag().wait_any()) {
+      index = 0;
+      while (index != async_events_.Size()) {
+        if (!hsa_signal_handle(async_events_.signal_[index])->IsValid()) {
+          hsa_signal_handle(async_events_.signal_[index])->Release();
+          async_events_.CopyIndex(index, async_events_.Size() - 1);
+          async_events_.PopBack();
+          continue;
+        }
+        index++;
       }
     }
 
