@@ -26,6 +26,7 @@
 #include "libhsakmt.h"
 #include "hsakmt/linux/kfd_ioctl.h"
 #include <stdlib.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -129,7 +130,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemoryAlign(HSAuint32 PreferredNode,
 	if (MemFlags.ui32.Contiguous)
 		CHECK_KFD_MINOR_VERSION(16);
 
-	pr_debug("[%s] node %d\n", __func__, PreferredNode);
+	pr_debug("[%s] pid:%d node %d\n", __func__, getpid(), PreferredNode);
 
 	result = validate_nodeid(PreferredNode, &gpu_id);
 	if (result != HSAKMT_STATUS_SUCCESS) {
@@ -171,7 +172,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemoryAlign(HSAuint32 PreferredNode,
 			return HSAKMT_STATUS_NO_MEMORY;
 		}
 
-		pr_debug("[%s] node %d address %p size %lu from scratch\n", __func__, PreferredNode, *MemoryAddress, SizeInBytes);
+		pr_debug("[%s] pid:%d node %d address %p size %lu from scratch\n",
+					__func__, getpid(), PreferredNode, *MemoryAddress, SizeInBytes);
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
@@ -189,12 +191,13 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemoryAlign(HSAuint32 PreferredNode,
 						   *MemoryAddress, SizeInBytes, Alignment, MemFlags);
 
 		if (!(*MemoryAddress)) {
-			pr_err("[%s] failed to allocate %lu bytes from host\n",
-				__func__, SizeInBytes);
+			pr_err("[%s] pid:%d failed to allocate %lu bytes from host\n",
+				__func__, getpid(), SizeInBytes);
 			return HSAKMT_STATUS_ERROR;
 		}
 
-		pr_debug("[%s] node %d address %p size %lu from host\n", __func__, PreferredNode, *MemoryAddress, SizeInBytes);
+		pr_debug("[%s] pid:%d node %d address %p size %lu from host\n",
+					__func__, getpid(), PreferredNode, *MemoryAddress, SizeInBytes);
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
@@ -215,7 +218,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemoryAlign(HSAuint32 PreferredNode,
 		return HSAKMT_STATUS_NO_MEMORY;
 	}
 
-	pr_debug("[%s] node %d address %p size %lu from device\n", __func__, PreferredNode, *MemoryAddress, SizeInBytes);
+	pr_debug("[%s] pid:%d node %d address %p size %lu from device\n",
+				__func__, getpid(), PreferredNode, *MemoryAddress, SizeInBytes);
 	return HSAKMT_STATUS_SUCCESS;
 
 }
@@ -225,7 +229,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtFreeMemory(void *MemoryAddress,
 {
 	CHECK_KFD_OPEN();
 
-	pr_debug("[%s] address %p\n", __func__, MemoryAddress);
+	pr_debug("[%s] pid:%d address %p\n", __func__, getpid(), MemoryAddress);
 
 	if (!MemoryAddress) {
 		pr_err("FIXME: freeing NULL pointer\n");
@@ -244,7 +248,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAvailableMemory(HSAuint32 Node,
 	CHECK_KFD_OPEN();
 	CHECK_KFD_MINOR_VERSION(9);
 
-	pr_debug("[%s] node %d\n", __func__, Node);
+	pr_debug("[%s] pid:%d node %d\n", __func__, getpid(), Node);
 
 	result = validate_nodeid(Node, &args.gpu_id);
 	if (result != HSAKMT_STATUS_SUCCESS) {
@@ -264,7 +268,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterMemory(void *MemoryAddress,
 {
 	CHECK_KFD_OPEN();
 
-	pr_debug("[%s] address %p size %lu\n", __func__, MemoryAddress, MemorySizeInBytes);
+	pr_debug("[%s] pid:%d address %p size %lu\n",
+			__func__, getpid(), MemoryAddress, MemorySizeInBytes);
 
 	if (!is_dgpu)
 		/* TODO: support mixed APU and dGPU configurations */
@@ -283,8 +288,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterMemoryToNodes(void *MemoryAddress,
 	uint32_t *gpu_id_array;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
-	pr_debug("[%s] address %p size %lu number of nodes %lu\n",
-		__func__, MemoryAddress, MemorySizeInBytes, NumberOfNodes);
+	pr_debug("[%s] pid:%d address %p size %lu number of nodes %lu\n",
+		__func__, getpid(), MemoryAddress, MemorySizeInBytes, NumberOfNodes);
 
 	if (!is_dgpu)
 		/* TODO: support mixed APU and dGPU configurations */
@@ -312,8 +317,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterMemoryWithFlags(void *MemoryAddress,
 	CHECK_KFD_OPEN();
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
-	pr_debug("[%s] address %p size %lu\n",
-		__func__, MemoryAddress, MemorySizeInBytes);
+	pr_debug("[%s] pid:%d address %p size %lu\n",
+		__func__, getpid(), MemoryAddress, MemorySizeInBytes);
 
 	if (MemFlags.ui32.ExtendedCoherent && MemFlags.ui32.CoarseGrain)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -341,7 +346,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterGraphicsHandleToNodes(HSAuint64 GraphicsRe
 	uint32_t *gpu_id_array = NULL;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
-	pr_debug("[%s] number of nodes %lu\n", __func__, NumberOfNodes);
+	pr_debug("[%s] pid:%d number of nodes %lu\n",
+				__func__, getpid(), NumberOfNodes);
 
 	if (NodeArray != NULL || NumberOfNodes != 0) {
 		ret = validate_nodeid_array(&gpu_id_array,
@@ -367,7 +373,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtExportDMABufHandle(void *MemoryAddress,
 	CHECK_KFD_OPEN();
 	CHECK_KFD_MINOR_VERSION(12);
 
-	pr_debug("[%s] address %p\n", __func__, MemoryAddress);
+	pr_debug("[%s] pid:%d address %p\n", __func__, getpid(), MemoryAddress);
 
 	return fmm_export_dma_buf_fd(MemoryAddress, MemorySizeInBytes,
 				     DMABufFd, Offset);
@@ -379,7 +385,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtShareMemory(void *MemoryAddress,
 {
 	CHECK_KFD_OPEN();
 
-	pr_debug("[%s] address %p\n", __func__, MemoryAddress);
+	pr_debug("[%s] pid:%d address %p\n", __func__, getpid(), MemoryAddress);
 
 	if (!SharedMemoryHandle)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -393,7 +399,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterSharedHandle(const HsaSharedMemoryHandle *
 {
 	CHECK_KFD_OPEN();
 
-	pr_debug("[%s] handle %p\n", __func__, SharedMemoryHandle);
+	pr_debug("[%s] pid:%d handle %p\n", __func__, getpid(), SharedMemoryHandle);
 
 	return hsaKmtRegisterSharedHandleToNodes(SharedMemoryHandle,
 						 MemoryAddress,
@@ -413,8 +419,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterSharedHandleToNodes(const HsaSharedMemoryH
 	uint32_t *gpu_id_array = NULL;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
-	pr_debug("[%s] handle %p number of nodes %lu\n",
-		__func__, SharedMemoryHandle, NumberOfNodes);
+	pr_debug("[%s] pid:%d handle %p number of nodes %lu\n",
+		__func__, getpid(), SharedMemoryHandle, NumberOfNodes);
 
 	if (!SharedMemoryHandle)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -470,7 +476,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDeregisterMemory(void *MemoryAddress)
 {
 	CHECK_KFD_OPEN();
 
-	pr_debug("[%s] address %p\n", __func__, MemoryAddress);
+	pr_debug("[%s] pid:%d address %p\n", __func__, getpid(), MemoryAddress);
 
 	return fmm_deregister_memory(MemoryAddress);
 }
@@ -481,7 +487,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtMapMemoryToGPU(void *MemoryAddress,
 {
 	CHECK_KFD_OPEN();
 
-	pr_debug("[%s] address %p\n", __func__, MemoryAddress);
+	pr_debug("[%s] pid:%d address %p\n", __func__, getpid(), MemoryAddress);
 
 	if (!MemoryAddress) {
 		pr_err("FIXME: mapping NULL pointer\n");
@@ -506,8 +512,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtMapMemoryToGPUNodes(void *MemoryAddress,
 
 	CHECK_KFD_OPEN();
 
-	pr_debug("[%s] address %p number of nodes %lu\n",
-		__func__, MemoryAddress, NumberOfNodes);
+	pr_debug("[%s] pid:%d address %p number of nodes %lu\n",
+		__func__, getpid(), MemoryAddress, NumberOfNodes);
 
 	if (!MemoryAddress) {
 		pr_err("FIXME: mapping NULL pointer\n");
@@ -537,7 +543,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtUnmapMemoryToGPU(void *MemoryAddress)
 {
 	CHECK_KFD_OPEN();
 
-	pr_debug("[%s] address %p\n", __func__, MemoryAddress);
+	pr_debug("[%s] pid:%d address %p\n", __func__, getpid(), MemoryAddress);
 
 	if (!MemoryAddress) {
 		/* Workaround for runtime bug */
