@@ -126,6 +126,13 @@ hsa_status_t Runtime::Acquire() {
 
   if (runtime_singleton_ == NULL) {
     memset(log_flags, 0, sizeof(log_flags));
+
+    //char logfilename[200];
+    //sprintf(logfilename, "rocr.log_%d", getpid());
+    //log_file = fopen(logfilename, "w");
+    log_file = stdout;
+
+    hsa_flag_set64(log_flags, HSA_AMD_LOG_FLAG_DEBUG);
     runtime_singleton_ = new Runtime();
   }
 
@@ -139,9 +146,17 @@ hsa_status_t Runtime::Acquire() {
   if (runtime_singleton_->ref_count_ == 1) {
     hsa_status_t status = runtime_singleton_->Load();
 
+     
+
+
     if (status != HSA_STATUS_SUCCESS) {
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
+
+
+
+    
+
   }
 
   refGuard.Dismiss();

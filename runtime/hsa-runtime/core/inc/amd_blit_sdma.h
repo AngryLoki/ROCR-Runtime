@@ -73,6 +73,8 @@ class BlitSdmaBase : public core::Blit {
                                              const hsa_dim3_t* src_offset, const hsa_dim3_t* range,
                                              std::vector<core::Signal*>& dep_signals,
                                              core::Signal& out_signal) = 0;
+
+  std::list<core::Signal*> debug_completion_signals;
 };
 
 // RingIndexTy: 32/64-bit monotonic ring index, counting in bytes.

@@ -93,8 +93,12 @@ class Flag {
     enable_peer_sdma_ = (var == "0") ? SDMA_DISABLE : ((var == "1") ? SDMA_ENABLE : SDMA_DEFAULT);
 
     var = os::GetEnvVar("HSA_ENABLE_SDMA_GANG");
+    #if 0
     enable_sdma_gang_ = (var == "0") ? SDMA_DISABLE :
                        ((var == "1") ? SDMA_ENABLE : SDMA_DEFAULT);
+    #else
+    enable_sdma_gang_ = SDMA_DISABLE;
+    #endif
     if (enable_sdma_ == SDMA_DISABLE) enable_sdma_gang_ = SDMA_DISABLE;
 
     var = os::GetEnvVar("HSA_ENABLE_SDMA_COPY_SIZE_OVERRIDE");
