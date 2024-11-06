@@ -131,6 +131,9 @@ BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::BlitSdma()
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bool useGCR>
 BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::~BlitSdma() {}
 
+
+
+
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bool useGCR>
 hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::Initialize(
     const core::Agent& agent, bool use_xgmi, size_t linear_copy_size_override, int rec_eng) {
@@ -272,10 +275,34 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset,
   return ret;
 }
 
+
+
+typedef struct copy_done_args_s{
+  hsa_signal_t signal;
+  uint32_t agent_node_id;
+  bool completion_signal;
+  uint64_t copy_id;
+  void* queue_start_addr;
+} copy_done_args_t;
+
+bool copy_done_callback(hsa_signal_value_t value, void *_arg) {
+  copy_done_args_t* arg = (copy_done_args_t*) _arg;
+
+  LogPrint(HSA_AMD_LOG_FLAG_DEBUG, "HSA-DEBUG[%lu]: Signal cleared:0x%zx node_id:%d completion-signal:%s",
+                      arg->copy_id, arg->signal, arg->agent_node_id, arg->completion_signal ? "Y" : "N");
+
+  free(_arg);
+  return false;
+}
+
+static uint64_t g_cnt = 0;
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bool useGCR>
 hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::SubmitCommand(
     const void* cmd, size_t cmd_size, uint64_t size, const std::vector<core::Signal*>& dep_signals,
     core::Signal& out_signal, std::vector<core::Signal*>& gang_signals) {
+
+  hsa_status_t ret;
+
 
   // The signal is 64 bit value, and poll checks for 32 bit value. So we
   // need to use two poll operations per dependent signal.
@@ -283,6 +310,61 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
       static_cast<uint32_t>(2 * dep_signals.size());
   const uint32_t total_poll_command_size =
       (num_poll_command * poll_command_size_);
+
+  std::string signals_string;
+  
+  for (int i = 0; i < dep_signals.size(); i++) {
+    char str[15];
+    sprintf(str, "0x%zx ", core::Signal::Convert(dep_signals[i]));
+    signals_string += str;
+  }
+
+  g_cnt++;
+  LogPrint(HSA_AMD_LOG_FLAG_DEBUG, "HSA-DEBUG[%lu]: SDMA-Copy node_id:%d dep-signal:[%s] completion-signal:0x%zx queue:0x%zx",
+              g_cnt,
+              agent_->node_id(), 
+              signals_string.c_str(),
+              core::Signal::Convert(&out_signal),
+              queue_start_addr_);
+
+  for (int i = 0; i < dep_signals.size(); i++) {
+    hsa_signal_t sig = core::Signal::Convert(dep_signals[i]);
+    copy_done_args_t* copy_done_args = (copy_done_args_t*)malloc(sizeof(*copy_done_args));
+  
+    copy_done_args->signal = sig;
+    copy_done_args->agent_node_id = agent_->node_id();
+    copy_done_args->completion_signal = false;
+    copy_done_args->copy_id = g_cnt;
+    copy_done_args->queue_start_addr = queue_start_addr_;
+
+    ret = core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
+      sig, HSA_SIGNAL_CONDITION_LT, 1, &copy_done_callback, (void*)copy_done_args);
+
+    if (ret != HSA_STATUS_SUCCESS) {
+      fprintf(stderr, "Failed to register async_handler\n");
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ARGUMENT,
+                             "Failed to register async_handler.");
+    }
+  }
+  if (1) {
+    hsa_signal_t sig = core::Signal::Convert(&out_signal);
+    copy_done_args_t* copy_done_args = (copy_done_args_t*)malloc(sizeof(*copy_done_args));
+  
+    copy_done_args->signal = sig;
+    copy_done_args->agent_node_id = agent_->node_id();
+    copy_done_args->completion_signal = true;
+    copy_done_args->copy_id = g_cnt;
+    copy_done_args->queue_start_addr = queue_start_addr_;
+
+    ret = core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
+      sig, HSA_SIGNAL_CONDITION_LT, 1, &copy_done_callback, (void*)copy_done_args);
+
+    if (ret != HSA_STATUS_SUCCESS) {
+      fprintf(stderr, "Failed to register async_handler-2\n");
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ARGUMENT,
+                             "Failed to register async_handler-2.");
+    }
+  }
 
   // Load the profiling state early in case the user disable or enable the
   // profiling in the middle of the call.
@@ -1115,7 +1197,7 @@ uint64_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::Pen
   } else {
     RingIndexTy dist_to_read_index = WrapIntoRing(commit - hw_read_index);
     read = commit - dist_to_read_index;
-  }
+  } 
 
   if (commit == read) return 0;
   return bytes_queued_ - bytes_written_[WrapIntoRing(read)];
