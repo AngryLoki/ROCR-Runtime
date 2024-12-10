@@ -241,7 +241,13 @@ class BlitSdma : public BlitSdmaBase {
   class {
    public:
     // Indexed by wrapped command queue indices (offsets).
-    uint64_t& operator[](uint32_t index) { return data_[convert(index)]; }
+    uint64_t& operator[](uint32_t index) {
+      if (index >= data_.size()) {
+        fprintf(stderr, "HSA-DEBUG index:%u convert(index):%u data_.size()\n", index, convert(index), data_.size());
+        abort();
+      }
+      return data_[convert(index)];
+    }
 
     void resize(size_t size) { data_.resize(convert(size)); }
 
